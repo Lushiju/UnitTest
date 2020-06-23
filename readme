@@ -1,0 +1,141 @@
+android单元测试-常见方案比较
+一、单元测试
+android中的单元测试基于JUnit，可分为本地测试和instrumented测试，在项目中对应如下：
+1.module-name/src/test/java/.
+　　该目录下的代码运行在本地JVM上，其优点是速度快，不需要设备或模拟器的支持，但是无法直接运行含有android系统API引用的测试代码。
+2.module-name/src/androidTest/java/.
+　　该目录下的测试代码需要运行在android设备或模拟器下面，因此可以使用android系统的API，速度较慢。
+
+以上分别执行在JUnit和AndroidJUnitRunner的测试运行环境，两者主要的区别在于是否需要android系统API的依赖。
+在实际开发过程中，我们应该尽量用JUnit实现本地JVM的单元测试，而项目中的代码大致可分为以下三类：
+
+1.强依赖关系，如在Activity，Service等组件中的方法，其特点是大部分为private方法，并且与其生命周期相关，无法直接进行单元测试，可以进行Ecspreso等UI测试。
+2.部分依赖，代码实现依赖注入，该类需要依赖Context等android对象的依赖，可以通过Mock或其它第三方框架实现JUnit单元测试或使用androidJunitRunner进行单元测试。
+3.纯java代码，不存在对android库的依赖，可以进行JUnit单元测试
+
+二、常用的测试框架
+在android测试框架中，常用的有以下几个框架和工具类：
+
+JUnit4
+AndroidJUnitRunner
+Mockito
+Espresso
+
+关于单元测试框架的选择，可以参考下图：
+
+
+三、JUnit4
+JUnit4是一套基于注解的单元测试框架。在android studio中，编写在test目录下的测试类都是基于该框架实现，该目录下的测试代码运行在本地的JVM上，不需要设备（真机或模拟器）的支持。
+JUnit4中常用的几个注解：
+
+@BeforeClass 测试类里所有用例运行之前，运行一次这个方法。方法必须是public static void
+@AfterClass 与BeforeClass对应
+@Before 在每个用测试例运行之前都运行一次。
+@After 与Before对应
+@Test 指定该方法为测试方法，方法必须是public void
+@RunWith 测试类名之前，用来确定这个类的测试运行器
+
+对于其它的注解，可以通过查看junit4官网来进一步学习
+
+在test下添加测试类，对于需要进行测试的方法添加@Test注解，在该方法中使用assert进行判断，以下是一个最简单的测试类CalculatorTest的实现：
+public class CalculatorTest {
+
+    /** 计算功能类 */
+    private Calculator mCalculator;
+
+    @Before
+    public void setUp() {
+        mCalculator = new Calculator();
+    }
+
+    /**
+     * 方法的命名尽量描述详细
+     * 测试两个数相加
+     */
+    @Test
+    public void addTwoNumbers() {
+        double resultAdd = mCalculator.add(1d, 1d);
+        //使用hamcrest进行assert，直观，易读
+        assertThat(resultAdd, is(equalTo(2d)));
+    }
+    ……
+}
+
+当需要传入多个参数进行条件，即条件覆盖时，可以使用@Parameters来进行单个方法的多次不同参数的测试，对应Demo中的CalculatorWithParameterizedTest测试类，使用该方法需要如下步骤：
+
+1.在测试类上添加@RunWith(Parameterized.class)注解。
+2.添加构造方法，并将测试的参数作为其构造参数。
+3.添加获取参数集合的static方法，并在该方法上添加@Parameters注解。
+4.在需要测试的方法中直接使用成员变量，该变量由JUnit通过构造方法生成。
+
+
+如果我们需要同时运行两个或多个Test类怎么办？JUnit提供了Suite注解，在对应的测试目录下创建一个空Test类，如Demo里的UnitTestSuite，该类上添加如下注解：
+
+@RunWith(Suite.class)：配置Runner运行环境。
+@Suite.SuiteClasses({A.class, B.class})：添加需要一起运行的测试类。
+
+@RunWith(Suite.class)
+@Suite.SuiteClasses({CalculatorTest.class, CalculatorWithParameterizedTest.class})
+public class UnitTestSuite {
+
+}
+
+四、AndroidJUnitRunner
+
+当单元测试中涉及到大量的android系统库的调用时，你可以通过该方案完成测试。使用方法是在androidTest目录下创建测试类，在该类上添加@RunWith(AndroidJUnit4.class)注解。
+在Demo中androidTest目录下的SharedPreferencesHelperTest测试类，该类对SharedPreferencesHelper进行了单元测试，其方法内部涉及到了SharedPreferences，该类属于android系统的api，因此无法直接在test中运行。部分实现代码如下：
+示例代码。。。。。
+
+在AndroidJUnitRunner中，通过InstrumentationRegistry来获取Context，并实例化SharedPreferences，然后通过依赖注入来完成SharedPreferencesHelper对象的生成。
+对于AndroidJUnitRunner更详细的介绍，可以参考android官方文档（https://developer.android.google.cn/training/testing）测试支持库。
+
+使用AndroidJUnitRunner最大的缺点在于无法在本地JVM运行，直接的结果就是测试速度慢，同时无法执行覆盖测试。
+因此出现了很多替代方案，比如在设计合理，依赖注入实现的代码，可以使用Mockito来进行本地测试，或者使用第三方测试框架Robolectric等。
+
+Mockito
+使用Mock的目的主要有以下两点：
+1.验证这个对象的某些方法的调用情况，调用了多少次，参数是什么等等
+2.指定这个对象的某些方法的行为，返回特定的值，或者是执行特定的动作
+需要添加如下依赖：testImplementation 'org.mockito:mockito-core:2.8.9'
+示例代码：
+
+Espresso
+在Demo中，除了单元测试的用例，还提供了一个CalculatorInstrumentationTest测试类，该类使用Espresso，一个官方提供了UI测试框架。注意，UI测试不属于单元测试的范畴。通过Espresso的使用，可以编写简洁、运行可靠的自动化UI测试
+示例代码：
+
+五、运行单元测试
+在Android Studio中，可以通过以下两种方式运行单元测试：
+1、手动运行
+在Android Studio中，对指定的测试类右键，选择对应的RUN或DEBUG操作选项即可运行，如下图：
+
+2、通过指令运行
+在Terminal输入gradle testDebugUnitTest或gradle testReleaseUnitTest指令来分别运行debug和release版本的unit testing，
+在执行的结果可以在xxx\project\app\build\reports\tests\testReleaseUnitTest中查看
+
+
+
+参考：https://www.jianshu.com/p/925191464389
+
+https://developer.android.google.cn/training/testing/junit-rules#additional-resources-samples
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
